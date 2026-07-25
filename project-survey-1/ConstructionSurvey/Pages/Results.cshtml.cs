@@ -1,3 +1,5 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using ConstructionSurvey.Models;
@@ -8,12 +10,24 @@ namespace ConstructionSurvey.Pages;
 public class ResultsModel : PageModel
 {
     private readonly JsonResultService _jsonService;
+    private readonly SurveyDataService _dataService;
+
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     public List<SurveySubmission> Submissions { get; set; } = new();
     public int TotalCount { get; set; }
     public int GreenCount { get; set; }
     public int YellowCount { get; set; }
     public int RedCount { get; set; }
+
+    /// <summary>문항 상세 모달에서 사용할 문항 목록(JSON)</summary>
+    public string QuestionsJson { get; set; } = "[]";
+
+    /// <summary>문항 상세 모달에서 사용할 제출 목록(JSON). 테이블 행 순서와 동일</summary>
+    public string SubmissionsJson { get; set; } = "[]";
 
     /// <summary>해당 날짜에 제출된 데이터만 표시</summary>
     public List<string> AvailableDates { get; set; } = new();
@@ -24,9 +38,10 @@ public class ResultsModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? Date { get; set; }
 
-    public ResultsModel(JsonResultService jsonService)
+    public ResultsModel(JsonResultService jsonService, SurveyDataService dataService)
     {
         _jsonService = jsonService;
+        _dataService = dataService;
     }
 
     public void OnGet()
@@ -65,5 +80,38 @@ public class ResultsModel : PageModel
         {
             Submissions = dateFiltered;
         }
+
+        BuildDetailJson();
+    }
+
+    /// <summary>사람별 응답 상세 모달에 넘길 데이터를 JSON으로 만든다</summary>
+    private void BuildDetailJson()
+    {
+        var questions = _dataService.GetQuestions()
+            .Select(q => new
+            {
+                number = q.Number,
+                category = q.Category,
+                text = q.Text,
+                reverse = q.IsReverseScored,
+                alcohol = q.IsAlcoholQuestion
+            })
+            .ToList();
+
+        var rows = Submissions
+            .Select(s => new
+            {
+                name = s.Name,
+                company = s.Company,
+                trade = s.Trade,
+                submitTime = s.SubmitTime,
+                totalScore = s.TotalScore,
+                riskLevel = s.RiskLevel,
+                answers = s.Answers ?? new Dictionary<int, int>()
+            })
+            .ToList();
+
+        QuestionsJson = JsonSerializer.Serialize(questions, _jsonOptions);
+        SubmissionsJson = JsonSerializer.Serialize(rows, _jsonOptions);
     }
 }

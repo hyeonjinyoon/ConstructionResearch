@@ -92,10 +92,11 @@
                         <th>총점</th>
                         <th>위험등급</th>
                         <th>위험 플래그</th>
+                        <th>응답 상세</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @{ var index = 1; }
+                    @{ var index = 1; var rowIdx = 0; }
                     @foreach (var s in Model.Submissions)
                     {
                         var rowClass = s.RiskLevel switch
@@ -126,8 +127,12 @@
                                     <button type="button" class="flag-btn" onclick="showFlags('@s.Name', '@Html.Raw(s.CriticalFlags.Replace("'", "\\'"))')">@(flagCount)건</button>
                                 }
                             </td>
+                            <td class="flags-cell">
+                                <button type="button" class="answers-btn" onclick="showAnswers(@rowIdx)">문항 보기</button>
+                            </td>
                         </tr>
                         index++;
+                        rowIdx++;
                     }
                 </tbody>
             </table>
@@ -142,6 +147,18 @@
                 <button type="button" class="flag-modal-close" onclick="closeFlags(event)">&times;</button>
             </div>
             <ul class="flag-modal-list" id="flagModalList"></ul>
+        </div>
+    </div>
+
+    <!-- 사람별 응답 상세 모달 -->
+    <div class="flag-modal-overlay" id="answerModal" onclick="closeAnswers(event)">
+        <div class="flag-modal answer-modal">
+            <div class="flag-modal-header">
+                <span class="flag-modal-title answer-modal-title" id="answerModalTitle">응답 상세</span>
+                <button type="button" class="flag-modal-close" onclick="closeAnswers(event)">&times;</button>
+            </div>
+            <div class="answer-modal-meta" id="answerModalMeta"></div>
+            <div class="answer-modal-body" id="answerModalBody"></div>
         </div>
     </div>
 </div>
@@ -248,5 +265,91 @@ function closeFlags(e) {
         modal.classList.remove('flag-modal-open');
     }
 }
+
+// ===== 사람별 응답 상세 =====
+var SURVEY_QUESTIONS = @Html.Raw(Model.QuestionsJson);
+var SURVEY_SUBMISSIONS = @Html.Raw(Model.SubmissionsJson);
+var ANSWER_LABELS = { 1: '전혀 아니다', 2: '별로 아니다', 3: '약간 그렇다', 4: '매우 그렇다' };
+
+function escapeHtml(text) {
+    return String(text == null ? '' : text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+// ScoringService와 동일한 위험 플래그 판정 규칙
+function getFlagReason(q, raw) {
+    if (q.alcohol && raw >= 3) return '음주 관련 문항 3점 이상 응답';
+    if (!q.reverse && raw === 4) return '매우 그렇다(4점) 응답';
+    if (q.reverse && raw === 1) return '전혀 아니다(1점) 응답 (역채점 문항)';
+    return null;
+}
+
+function showAnswers(rowIndex) {
+    var s = SURVEY_SUBMISSIONS[rowIndex];
+    if (!s) return;
+
+    document.getElementById('answerModalTitle').textContent = s.name + ' - 응답 상세';
+
+    document.getElementById('answerModalMeta').innerHTML =
+        '<span class="answer-meta-item">' + escapeHtml(s.company) + '</span>' +
+        '<span class="answer-meta-item">' + escapeHtml(s.trade) + '</span>' +
+        '<span class="answer-meta-item">' + escapeHtml(s.submitTime) + '</span>' +
+        '<span class="answer-meta-item answer-meta-score">총점 ' + s.totalScore + '점 / ' + escapeHtml(s.riskLevel) + '</span>';
+
+    var html = '';
+    for (var i = 0; i < SURVEY_QUESTIONS.length; i++) {
+        var q = SURVEY_QUESTIONS[i];
+        var raw = s.answers ? s.answers[q.number] : undefined;
+        var answered = (raw !== undefined && raw !== null);
+        var score = answered ? (q.reverse ? (5 - raw) : raw) : null;
+        var flagReason = answered ? getFlagReason(q, raw) : null;
+
+        html += '<div class="answer-item' + (flagReason ? ' answer-item-flagged' : '') + '">';
+        html += '<div class="answer-item-head">';
+        html += '<span class="answer-q-num">문항 ' + q.number + '</span>';
+        html += '<span class="answer-q-cat">' + escapeHtml(q.category) + '</span>';
+        if (q.reverse) html += '<span class="answer-badge answer-badge-reverse">역채점</span>';
+        if (flagReason) html += '<span class="answer-badge answer-badge-flag">위험</span>';
+        html += '</div>';
+        html += '<div class="answer-q-text">' + escapeHtml(q.text) + '</div>';
+
+        if (answered) {
+            html += '<div class="answer-choice-row">';
+            for (var v = 1; v <= 4; v++) {
+                var cls = 'answer-choice' + (v === raw ? ' answer-choice-selected' : '');
+                html += '<span class="' + cls + '">' + ANSWER_LABELS[v] + '</span>';
+            }
+            html += '</div>';
+            html += '<div class="answer-score-line">응답 ' + raw + '점 → 환산 <strong>' + score + '점</strong>';
+            if (flagReason) html += ' <span class="answer-flag-reason">· ' + escapeHtml(flagReason) + '</span>';
+            html += '</div>';
+        } else {
+            html += '<div class="answer-score-line answer-no-response">응답 없음</div>';
+        }
+
+        html += '</div>';
+    }
+
+    document.getElementById('answerModalBody').innerHTML = html;
+    document.getElementById('answerModal').classList.add('flag-modal-open');
+}
+
+function closeAnswers(e) {
+    var modal = document.getElementById('answerModal');
+    if (e.target === modal || e.target.classList.contains('flag-modal-close')) {
+        modal.classList.remove('flag-modal-open');
+    }
+}
+
+// ESC 키로 모달 닫기
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.getElementById('flagModal').classList.remove('flag-modal-open');
+        document.getElementById('answerModal').classList.remove('flag-modal-open');
+    }
+});
 </script>
 }
