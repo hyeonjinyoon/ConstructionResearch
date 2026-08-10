@@ -10,6 +10,11 @@
 <div class="results-page">
     <h2 class="results-title">설문 결과 현황</h2>
 
+    @if (!string.IsNullOrEmpty(Model.StatusMessage))
+    {
+        <div class="status-message">@Model.StatusMessage</div>
+    }
+
     <!-- 날짜 필터 (달력) -->
     @if (Model.AvailableDates.Count > 0)
     {
@@ -77,66 +82,91 @@
     }
     else
     {
-        <!-- 결과 테이블 -->
-        <div class="results-table-wrapper">
-            <table class="results-table">
-                <thead>
-                    <tr>
-                        <th>번호</th>
-                        <th>이름</th>
-                        <th>소속업체</th>
-                        <th>공종</th>
-                        <th>접속시간</th>
-                        <th>제출시간</th>
-                        <th>소요시간</th>
-                        <th>총점</th>
-                        <th>위험등급</th>
-                        <th>위험 플래그</th>
-                        <th>응답 상세</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @{ var index = 1; var rowIdx = 0; }
-                    @foreach (var s in Model.Submissions)
-                    {
-                        var rowClass = s.RiskLevel switch
-                        {
-                            "양호" => "risk-green",
-                            "주의" => "risk-yellow",
-                            "위험" => "risk-red",
-                            _ => ""
-                        };
-                        <tr class="@rowClass">
-                            <td>@index</td>
-                            <td>@s.Name</td>
-                            <td>@s.Company</td>
-                            <td>@s.Trade</td>
-                            <td>@s.AccessTime</td>
-                            <td>@s.SubmitTime</td>
-                            <td>@s.Duration</td>
-                            <td><strong>@s.TotalScore</strong></td>
-                            <td><strong>@s.RiskLevel</strong></td>
-                            <td class="flags-cell">
-                                @if (s.CriticalFlags == "없음")
-                                {
-                                    <span class="flag-none">없음</span>
-                                }
-                                else
-                                {
-                                    var flagCount = s.CriticalFlags.Split(" / ").Length;
-                                    <button type="button" class="flag-btn" onclick="showFlags('@s.Name', '@Html.Raw(s.CriticalFlags.Replace("'", "\\'"))')">@(flagCount)건</button>
-                                }
-                            </td>
-                            <td class="flags-cell">
-                                <button type="button" class="answers-btn" onclick="showAnswers(@rowIdx)">문항 보기</button>
-                            </td>
+        <!-- 결과 테이블 (삭제를 위해 form으로 감쌈) -->
+        <form method="post">
+            <!-- 삭제 후에도 보고 있던 필터를 유지하기 위한 값 -->
+            <input type="hidden" name="Filter" value="@Model.Filter" />
+            <input type="hidden" name="Date" value="@Model.Date" />
+
+            <div class="delete-bar">
+                <span class="delete-bar-count">선택 <strong id="selectedCount">0</strong>건</span>
+                <button type="submit" asp-page-handler="DeleteSelected"
+                        class="delete-selected-btn" id="deleteSelectedBtn"
+                        onclick="return confirmDeleteSelected()" disabled>선택 삭제</button>
+                <span class="delete-bar-note">삭제한 응답은 보관 폴더로 옮겨집니다</span>
+            </div>
+
+            <div class="results-table-wrapper">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th class="check-col"><input type="checkbox" id="selectAll" title="전체 선택" /></th>
+                            <th>번호</th>
+                            <th>이름</th>
+                            <th>소속업체</th>
+                            <th>공종</th>
+                            <th>접속시간</th>
+                            <th>제출시간</th>
+                            <th>소요시간</th>
+                            <th>총점</th>
+                            <th>위험등급</th>
+                            <th>위험 플래그</th>
+                            <th>응답 상세</th>
+                            <th>삭제</th>
                         </tr>
-                        index++;
-                        rowIdx++;
-                    }
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        @{ var index = 1; var rowIdx = 0; }
+                        @foreach (var s in Model.Submissions)
+                        {
+                            var rowClass = s.RiskLevel switch
+                            {
+                                "양호" => "risk-green",
+                                "주의" => "risk-yellow",
+                                "위험" => "risk-red",
+                                _ => ""
+                            };
+                            <tr class="@rowClass">
+                                <td class="check-col">
+                                    <input type="checkbox" class="row-check" name="ids" value="@s.Id" />
+                                </td>
+                                <td>@index</td>
+                                <td>@s.Name</td>
+                                <td>@s.Company</td>
+                                <td>@s.Trade</td>
+                                <td>@s.AccessTime</td>
+                                <td>@s.SubmitTime</td>
+                                <td>@s.Duration</td>
+                                <td><strong>@s.TotalScore</strong></td>
+                                <td><strong>@s.RiskLevel</strong></td>
+                                <td class="flags-cell">
+                                    @if (s.CriticalFlags == "없음")
+                                    {
+                                        <span class="flag-none">없음</span>
+                                    }
+                                    else
+                                    {
+                                        var flagCount = s.CriticalFlags.Split(" / ").Length;
+                                        <button type="button" class="flag-btn" onclick="showFlags('@s.Name', '@Html.Raw(s.CriticalFlags.Replace("'", "\\'"))')">@(flagCount)건</button>
+                                    }
+                                </td>
+                                <td class="flags-cell">
+                                    <button type="button" class="answers-btn" onclick="showAnswers(@rowIdx)">문항 보기</button>
+                                </td>
+                                <td>
+                                    <button type="submit" asp-page-handler="Delete"
+                                            name="id" value="@s.Id"
+                                            class="delete-btn" data-name="@s.Name"
+                                            onclick="return confirmDelete(this)">삭제</button>
+                                </td>
+                            </tr>
+                            index++;
+                            rowIdx++;
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </form>
     }
 
     <!-- 위험 플래그 상세 모달 -->
@@ -241,6 +271,53 @@
 
     renderCalendar();
 })();
+
+// 삭제 체크박스 (전체 선택 / 선택 개수 / 확인창)
+(function() {
+    var selectAll = document.getElementById('selectAll');
+    if (!selectAll) return; // 결과가 없으면 표 자체가 없음
+
+    var rowChecks = document.querySelectorAll('.row-check');
+    var countLabel = document.getElementById('selectedCount');
+    var deleteBtn = document.getElementById('deleteSelectedBtn');
+
+    function selectedCount() {
+        var n = 0;
+        rowChecks.forEach(function(c) { if (c.checked) n++; });
+        return n;
+    }
+
+    function refresh() {
+        var n = selectedCount();
+        countLabel.textContent = n;
+        deleteBtn.disabled = n === 0;
+        selectAll.checked = n > 0 && n === rowChecks.length;
+    }
+
+    selectAll.addEventListener('change', function() {
+        rowChecks.forEach(function(c) { c.checked = selectAll.checked; });
+        refresh();
+    });
+
+    rowChecks.forEach(function(c) {
+        c.addEventListener('change', refresh);
+    });
+
+    refresh();
+})();
+
+function confirmDelete(btn) {
+    return confirm(btn.dataset.name + ' 님의 응답을 삭제할까요?\n\n삭제한 응답은 보관 폴더로 옮겨지며, 결과 목록과 통계에서 제외됩니다.');
+}
+
+function confirmDeleteSelected() {
+    var n = document.querySelectorAll('.row-check:checked').length;
+    if (n === 0) {
+        alert('삭제할 응답을 먼저 선택해 주세요.');
+        return false;
+    }
+    return confirm('선택한 ' + n + '건의 응답을 삭제할까요?\n\n삭제한 응답은 보관 폴더로 옮겨지며, 결과 목록과 통계에서 제외됩니다.');
+}
 
 function showFlags(name, flagsText) {
     var modal = document.getElementById('flagModal');

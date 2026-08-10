@@ -38,6 +38,10 @@ public class ResultsModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? Date { get; set; }
 
+    /// <summary>삭제 후 안내 문구 (리다이렉트 후 1회만 표시)</summary>
+    [TempData]
+    public string? StatusMessage { get; set; }
+
     public ResultsModel(JsonResultService jsonService, SurveyDataService dataService)
     {
         _jsonService = jsonService;
@@ -113,5 +117,46 @@ public class ResultsModel : PageModel
 
         QuestionsJson = JsonSerializer.Serialize(questions, _jsonOptions);
         SubmissionsJson = JsonSerializer.Serialize(rows, _jsonOptions);
+    }
+
+    /// <summary>응답 1건 삭제 (표의 삭제 버튼)</summary>
+    public IActionResult OnPostDelete(string id)
+    {
+        StatusMessage = _jsonService.DeleteSubmission(id)
+            ? "응답 1건을 삭제했습니다."
+            : "삭제하지 못했습니다. 이미 삭제된 응답일 수 있습니다.";
+
+        return RedirectKeepingFilters();
+    }
+
+    /// <summary>체크한 응답을 한 번에 삭제</summary>
+    public IActionResult OnPostDeleteSelected(string[] ids)
+    {
+        if (ids == null || ids.Length == 0)
+        {
+            StatusMessage = "선택된 응답이 없습니다.";
+            return RedirectKeepingFilters();
+        }
+
+        var deleted = _jsonService.DeleteSubmissions(ids);
+        StatusMessage = deleted == ids.Length
+            ? $"응답 {deleted}건을 삭제했습니다."
+            : $"응답 {deleted}건을 삭제했습니다. ({ids.Length - deleted}건은 이미 삭제된 응답입니다)";
+
+        return RedirectKeepingFilters();
+    }
+
+    /// <summary>삭제 후 보고 있던 날짜/등급 필터를 그대로 유지한 채 목록으로 돌아갑니다.</summary>
+    private IActionResult RedirectKeepingFilters()
+    {
+        var routeValues = new Dictionary<string, string?>();
+
+        if (!string.IsNullOrEmpty(Filter))
+            routeValues["Filter"] = Filter;
+
+        if (!string.IsNullOrEmpty(Date))
+            routeValues["Date"] = Date;
+
+        return RedirectToPage("/Results", routeValues);
     }
 }
