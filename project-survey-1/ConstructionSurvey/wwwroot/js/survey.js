@@ -30,4 +30,17 @@ document.addEventListener('DOMContentLoaded', function () {
     for (var i = 0; i < radios.length; i++) {
         radios[i].addEventListener('change', updateProgress);
     }
+
+    // 제출 버튼을 두 번 누르면(휴대폰에서 두 번 탭하면) 같은 응답이 두 건 저장되므로,
+    // 한 번 제출한 뒤에는 버튼을 잠급니다.
+    var submitting = false;
+    form.addEventListener('submit', function (e) {
+        if (submitting) {
+            e.preventDefault();
+            return;
+        }
+        submitting = true;
+        submitBtn.disabled = true;
+        submitBtn.textContent = '제출 중...';
+    });
 });
