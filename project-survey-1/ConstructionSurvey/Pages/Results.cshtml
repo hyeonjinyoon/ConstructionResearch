@@ -196,9 +196,10 @@
 @section Scripts {
 <script>
 (function() {
-    var availableDates = [@Html.Raw(string.Join(",", Model.AvailableDates.Select(d => $"\"{d}\"")))];
-    var selectedDate = "@(Model.Date ?? "")";
-    var currentFilter = "@(Model.Filter ?? "")";
+    // Json.Serialize로 감싸야 한글(양호/주의/위험)이 &#xC591; 같은 HTML 문자로 깨지지 않습니다
+    var availableDates = @Json.Serialize(Model.AvailableDates);
+    var selectedDate = @Json.Serialize(Model.Date ?? "");
+    var currentFilter = @Json.Serialize(Model.Filter ?? "");
 
     var availableSet = {};
     availableDates.forEach(function(d) { availableSet[d] = true; });
